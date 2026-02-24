@@ -7,9 +7,11 @@ class Product:
     price: float
     category: str = field(default="General")
     """
+    #post_init
     if self.price <= 0:
         ValueError("Price has to be greater than 0")
     """
 
 
 p = Product("Juice", -5, "Drinks")
+
