@@ -1,0 +1,3 @@
+Zaliczenie:
+-projekt(samodzielny!)
+-można to zrobić w około 200 linijkach kodu
