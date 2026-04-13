@@ -49,7 +49,7 @@ class Directory(Component):
         component.parent = self
         self.children.append(component)
 
-    def remove(self, component: Any) -> None:
+    def remove(self, component: Any) -> None: # redo
         component.parent = None
         self.children.remove(component)
 
