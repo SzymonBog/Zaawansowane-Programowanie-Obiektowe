@@ -1,4 +1,4 @@
-wrzuć plik z pyłkiem
+WRZUĆ PLIK Z PYŁKIEM!!!!!!!!!!!
 
 github.com/betacord/ZPO
 
