@@ -77,36 +77,100 @@ class Knight(Strategy):
     def __init__(self) -> None:
         super().__init__()
         self.health = 200
-        self.damage = 100
+        self.damage = 20
 
     def attack(self) -> None:
-        cl = Strategy.__subclasses__()
-        print(cl)
-        for c in cl:
-            if c != self.__class__:
-                print(c.instances)
-        return
+        if self.health > 0:
+            cl = Strategy.__subclasses__()
+            print(cl)
+            for c in cl:
+                if c != self.__class__:
+                    print(c.instances)
+                    for i in c.instances:
+                        if i.health > 0:
+                            ch = choice(["Miss", "Hit", "Crit"])
+                            if ch == "Miss":
+                                print("Missed")
+                            elif ch == "Hit":
+                                i.health -= self.damage
+                                print(i.health)
+                            elif ch == "Crit":
+                                i.health -= self.damage * 2
+                                print(i.health)
 
 
 class Berserker(Strategy):
     def __init__(self) -> None:
         super().__init__()
         self.health = 50
-        self.damage = 300
+        self.damage = 75
 
     def attack(self) -> None:
-        sub = Strategy.instances
-        for s in sub:
-            print(s)
-        return
+        if self.health > 0:
+            cl = Strategy.__subclasses__()
+            print(cl)
+            for c in cl:
+                if c != self.__class__:
+                    print(c.instances)
+                    for i in c.instances:
+                        if i.health > 0:
+                            ch = choice(["Miss", "Hit", "Crit"])
+                            if ch == "Miss":
+                                print("Missed")
+                            elif ch == "Hit":
+                                i.health -= self.damage
+                                print(i.health)
+                            elif ch == "Crit":
+                                i.health -= self.damage * 2
+                                print(i.health)
 
 
-b = Berserker()
+b0 = Berserker()
 b1 = Berserker()
-b1.attack()
-k = Knight()
-k.attack()
+b2 = Berserker()
+b3 = Berserker()
 
+k0 = Knight()
+k1 = Knight()
+k2 = Knight()
+k3 = Knight()
+
+kn = [k0, k1, k2, k3]
+ka = 4
+br = [b0, b1, b2, b3]
+ba = 4
+
+r = 1
+
+while True:
+    print(f"Round {r}")
+
+    for i in range(8):
+        if i % 2 == 0:
+            br[int(i/2)].attack()
+        else:
+            kn[int((i-1)/2)].attack()
+
+    # for k in kn:
+    #    k.attack()
+
+    for k in kn:
+        if k.health <= 0:
+            ka -= 1
+
+    if ka == 0:
+        print("Berserkers won")
+        break
+
+    for b in br:
+        if b.health <= 0:
+            ba -= 1
+
+    if ba == 0:
+        print("Knights won")
+        break
+
+    r += 1
 
 # ------------------------------------------------------------------------
 
