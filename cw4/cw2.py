@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Self, Generator
 
 
 class Iterator:
@@ -94,4 +94,25 @@ for i in oi:
 
 oi.set_state("done")
 for i in oi:
+    print(i)
+
+
+# ----------------------------------------------------------
+
+
+def generator(n: int) -> Generator:
+    i = 1
+
+    while True:
+        yield 1/i
+
+        if i == n:
+            break
+        else:
+            i += 1
+
+
+g = generator(20)
+
+for i in g:
     print(i)
