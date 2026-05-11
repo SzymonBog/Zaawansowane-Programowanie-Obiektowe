@@ -46,5 +46,5 @@ Wymagania funkcjonalne
 
 
 budowniczy(może), wytworcza, singleton
-fasada(nie), dekorator
+dekorator, adapter(do pobierania z isbn)
 pamiątka, iterator
