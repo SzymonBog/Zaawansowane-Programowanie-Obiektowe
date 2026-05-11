@@ -1,6 +1,6 @@
 """
 wytworcza, singleton
-fasada, dekorator
+dekorator, pelnomocnik(MOŻE), adapter(MOŻE), pyłek(MOŻE)
 pamiątka, iterator
 """
 from typing import Self
