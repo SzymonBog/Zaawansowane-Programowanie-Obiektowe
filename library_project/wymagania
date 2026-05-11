@@ -42,9 +42,9 @@ Wymagania funkcjonalne
         wyświetlanie historii wypożyczeń i zwrotów dla danego użytkownika,
         możliwość cofnięcia ostatniej operacji (wypożyczenie, zwrot).
     Symulowane integracja z zewnętrzną bazą książek:
-        możliwość "pobrania" danych książki z zewnętrznej bazy danych na podstawie ISBN.
+        możliwość "pobrania" danych książki z zewnętrznej bazy danych na podstawie ISBN. (nie trzeba isbn)
 
 
 budowniczy(może), wytworcza, singleton
-fasada, dekorator
+fasada(nie), dekorator
 pamiątka, iterator
