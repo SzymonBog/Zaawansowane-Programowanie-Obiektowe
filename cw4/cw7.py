@@ -191,7 +191,7 @@ class ObservableDetector(ABC):
 
 
 class BaseObserver(ABC):
-    def __init__(self, observable: ObservableServer):
+    def __init__(self, observable: ObservableDetector):
         observable.add_observer(self)
 
     @abstractmethod
@@ -199,14 +199,45 @@ class BaseObserver(ABC):
         pass
 
 
-class MovementDetector(ObservableDetector):
+class Detector(ObservableDetector):
     number: int
-    
-    def __init__(self, number: int) -> None:
+
+    def __init__(self, number: int, looking: bool, hearing: bool) -> None:
         super().__init__()
         self.number = number
+        self.hearing = hearing
+        self.looking = looking
+        self.message = None
 
     def watch(self) -> None:
-        see = random.randint(0, 1)
-        if see == 1:
-            self.alert(["Movement detected"])
+        if self.looking:
+            see = random.randint(0, 1)
+            if see == 1:
+                self.message = f"Detector{self.number}: Movement detected"
+                self.alert([f"Detector{self.number}: Movement detected"])
+
+    def listen(self) -> None:
+        if self.hearing:
+            hear = random.randint(0, 3)
+            if hear >= 2:
+                self.message = f"Detector{self.number}: Something heard"
+                self.alert([f"Detector{self.number}: Something heard"])
+
+    def __str__(self):
+        return self.message
+
+
+class Observer(BaseObserver):
+    def activate(self, *args: list, **kwargs: dict) -> None:
+        alert = kwargs["alert"]
+        if alert is not None:
+            print(alert)
+
+
+detector = Detector(1, True, True)
+observer1 = Observer(detector)
+observer2 = Observer(detector)
+
+for _ in range(20):
+    detector.listen()
+    detector.watch()
