@@ -9,7 +9,7 @@ import sqlite3
 
 
 class Singleton:
-    _instance: Self
+    _instance: Self = None
 
     def __new__(cls, *args, **kwargs) -> Self:
         if cls._instance is None:
@@ -20,6 +20,15 @@ class Singleton:
 
 
 class DatabaseConnection:
+    _instance: Self = None
+
+    def __new__(cls, *args, **kwargs) -> Self:
+        if cls._instance is None:
+            instance = super().__new__(cls) # , *args, **kwargs
+            cls._instance = instance
+
+        return cls._instance
+
     def __init__(self, database_name):
         self.database_name = database_name
         self.mydb = sqlite3.connect(self.database_name)  # commit
@@ -33,3 +42,9 @@ class DatabaseConnection:
 
 class User(ABC):
     pass
+
+
+db = DatabaseConnection("library_database.db")
+db1 = DatabaseConnection("library_database.db")
+
+print(db is db1)
