@@ -68,11 +68,24 @@ class DatabaseConnection:  # singleton
 def verify_permissions(fn: callable) -> callable:  # change to verify permissions
     def getter(self, *args: list, **kwargs: dict):
         fn(self, *args, **kwargs)
+        found = False
 
+        for p in self.permissions:
+            # print(p)
+            if str(fn).__contains__(p):
+                print("yay")
+                found = True
+        # print(str(fn).__contains__("borrow_book"))
+
+        if not found:
+            raise Exception("You are not authorized to do this")
+
+        """
         if self.role == "admin":
-            self.permissions = ["add books", "edit books", "remove books"]
+            self.permissions = ["add_book", "edit_book", "remove_book"]
         else:
-            self.permissions = ["borrow books", "return books"]
+            self.permissions = ["borrow_book", "return_book"]
+        """
 
     return getter
 
@@ -110,10 +123,6 @@ class User(ABC):
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         pass
 
-    #@abstractmethod
-    #def set_permissions(self, permissions: list) -> None:
-    #    pass
-
 
 class LibraryUser(User):
     def __init__(self, username: str, password: str, name: str, surname: str, role: str) -> None:
@@ -123,7 +132,7 @@ class LibraryUser(User):
         self.surname = surname
         self.role = role
         self.logged_in = False
-        self.permissions = ["borrow books", "return books"]
+        self.permissions = ["borrow_book", "return_book"]
         self.books = []
 
     def get_logged_in(self) -> bool:
@@ -181,7 +190,7 @@ class LibraryAdmin(User):
         self.surname = surname
         self.role = role
         self.logged_in = False
-        self.permissions = ["add books", "edit books", "remove books"]
+        self.permissions = ["add_book", "edit_book", "remove_book"]
 
     def get_logged_in(self) -> bool:
         return self.logged_in
@@ -228,6 +237,7 @@ class LibraryAdmin(User):
         text.append(f"{self.name} {self.surname}", style="cyan")
 
         yield text
+
 
 class UserFactory(ABC):
     @abstractmethod
@@ -297,9 +307,6 @@ class Book:
         self.copies = copies
 
 
-
-
-
 @app.command()
 def run():
     mydb = DatabaseConnection("library_database.db")
@@ -311,7 +318,7 @@ def run():
     print(lu.get_permissions())
 
     lu1 = LibraryUser("lu", "lu", "lu", "lu", "admin")
-    print(lu1.get_permissions())
+    print(lu1.remove_book("", "", 15, 1))
     console.print(lu1)
     # console.print("TEST COLOR", style="bold red")
 
