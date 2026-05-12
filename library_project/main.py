@@ -6,6 +6,15 @@ pamiątka, iterator
 from typing import Self
 from abc import ABC, abstractmethod
 import sqlite3
+import typer
+from rich import print
+from rich.console import Console, RenderResult
+from rich.text import Text
+
+
+console = Console()
+
+app = typer.Typer()
 
 
 class DatabaseConnection:  # singleton
@@ -45,20 +54,174 @@ class DatabaseConnection:  # singleton
 
             # save tables/changes to db
             self.mydb.commit()
-            print(f"Database {self.database_name} created")
+            console.print(f"Database {self.database_name} created")  # :boom:")
         else:
             # for testing
-            print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall())
-            print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0])
-            print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0][0])
+            # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall())
+            # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0])
+            # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0][0])
             pass
+
+def set_permissions(fn: callable) -> callable:
+    def setter(self, *args: list, **kwargs: dict):
+        fn(self, *args, **kwargs)
+
+        if self.role == "admin":
+            self.permissions = ["add books", "edit books", "remove books"]
+        else:
+            self.permissions = ["borrow books", "return books"]
+
+    return setter
 
 
 class User(ABC):
-    pass
+    @abstractmethod
+    def get_logged_in(self) -> bool:
+        pass
+
+    @abstractmethod
+    def set_logged_in(self) -> bool:
+        pass
+
+    @abstractmethod
+    def get_permissions(self) -> list:
+        pass
+
+    #@abstractmethod
+    #def set_permissions(self, permissions: list) -> None:
+    #    pass
 
 
-mydb = DatabaseConnection("library_database.db")
-# mydb1 = DatabaseConnection("library_database.db")
+class LibraryUser(User):
+    @set_permissions
+    def __init__(self, username: str, password: str, name: str, surname: str, role: str) -> None:
+        self.username = username
+        self.password = password
+        self.name = name
+        self.surname = surname
+        self.role = role
+        self.logged_in = False
+        self.permissions = []
+        self.books = []
 
-# print(mydb is mydb1)
+    def get_logged_in(self) -> bool:
+        return self.logged_in
+
+    def set_logged_in(self) -> None:
+        if self.logged_in:
+            self.logged_in = False
+        else:
+            self.logged_in = True
+
+    def get_permissions(self) -> list:
+        return self.permissions
+
+    def borrow_book(self, title: str, author: str) -> None:
+        self.books.append((title, author))
+
+    def return_book(self, title: str, author: str) -> None:
+        self.books.remove((title, author))
+
+    def __str__(self):
+        return f"{self.role}: {self.username} - {self.name} {self.surname}"
+
+    def __rich_console__(self, console, options):
+        text = Text()
+
+        text.append(f"{self.role}", style="bold green")
+        text.append(": ")
+        text.append(self.username, style="white")
+        text.append(" - ")
+        text.append(f"{self.name} {self.surname}", style="cyan")
+
+        yield text
+
+class LibraryAdmin(User):
+    @set_permissions
+    def __init__(self, username: str, password: str, name: str, surname: str, role: str) -> None:
+        self.username = username
+        self.password = password
+        self.name = name
+        self.surname = surname
+        self.role = role
+        self.logged_in = False
+        self.permissions = []
+
+    def get_logged_in(self) -> bool:
+        return self.logged_in
+
+    def set_logged_in(self) -> None:
+        if self.logged_in:
+            self.logged_in = False
+        else:
+            self.logged_in = True
+
+    def get_permissions(self) -> list:
+        return self.permissions
+
+    def add_book(self, title: str, author: str, year: int, copies: int) -> None:
+        raise Exception("Not implemented")
+
+    def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
+        raise Exception("Not implemented")
+
+    # def __str__(self):
+    #    return f"[bold red]{self.role}[/bold red]: {self.username} - {self.name} {self.surname}"
+
+    def __rich_console__(self, console, options):
+        text = Text()
+
+        text.append(f"{self.role}", style="bold green")
+        text.append(": ")
+        text.append(self.username, style="white")
+        text.append(" - ")
+        text.append(f"{self.name} {self.surname}", style="cyan")
+
+        yield text
+
+class UserFactory(ABC):
+    @abstractmethod
+    def create_user(self, username: str, password: str, name: str, surname: str, role: str) -> User:
+        pass
+
+
+class LibraryUserFactory(UserFactory):
+    def create_user(self, username: str, password: str, name: str, surname: str, role: str) -> User:
+        return LibraryUser(username, password, name, surname, role)
+
+
+class LibraryAdminFactory(UserFactory):
+    def create_user(self, username: str, password: str, name: str, surname: str, role: str) -> User:
+        return LibraryAdmin(username, password, name, surname, role)
+
+
+class Factory:
+    _factories: dict
+
+    def __init__(self) -> None:
+        self._factories = {
+            "user": LibraryUserFactory(),
+            "admin": LibraryAdminFactory(),
+        }
+
+    def create_user(self, username: str, password: str, name: str, surname: str, role: str) -> User:
+        return self._factories[role](username, password, name, surname, role)
+
+
+@app.command()
+def run():
+    mydb = DatabaseConnection("library_database.db")
+    # mydb1 = DatabaseConnection("library_database.db")
+
+    # print(mydb is mydb1)
+
+    lu = LibraryUser("lu", "lu", "lu", "lu", "user")
+    print(lu.get_permissions())
+
+    lu1 = LibraryUser("lu", "lu", "lu", "lu", "admin")
+    print(lu1.get_permissions())
+    console.print(lu1)
+    # console.print("TEST COLOR", style="bold red")
+
+if __name__ == "__main__":
+    app()
