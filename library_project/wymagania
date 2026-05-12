@@ -38,13 +38,18 @@ Wymagania funkcjonalne
     Rezerwacje książek:
         możliwość rezerwacji niedostępnej książki,
         automatyczne powiadomienie (komunikat w konsoli) o dostępności zarezerwowanej książki gdy zostanie zarezerowana (symulacja natychmiastowego zwrotu przez innego użytkownika).
-    Historia i cofanie działań:
+    Historia i cofanie działań:  # (sqlite?????????)
         wyświetlanie historii wypożyczeń i zwrotów dla danego użytkownika,
         możliwość cofnięcia ostatniej operacji (wypożyczenie, zwrot).
     Symulowane integracja z zewnętrzną bazą książek:
         możliwość "pobrania" danych książki z zewnętrznej bazy danych na podstawie ISBN. (nie trzeba isbn)
 
 
-budowniczy(może), wytworcza, singleton
-dekorator, adapter(do pobierania z isbn)
-pamiątka, iterator
+wytworcza,
+singleton \/
+
+dekorator,
+adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor)]
+
+iterator,
+pamiątka(czy może być z zapisem do i odczytem z sql)
