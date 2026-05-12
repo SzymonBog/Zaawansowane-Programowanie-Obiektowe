@@ -78,7 +78,7 @@ def verify_permissions(fn: callable) -> callable:  # change to verify permission
         # print(str(fn).__contains__("borrow_book"))
 
         if not found:
-            raise Exception("You are not authorized to do this")
+            raise RuntimeError("You are not authorized to do this")
 
         """
         if self.role == "admin":
@@ -318,7 +318,7 @@ def run():
     print(lu.get_permissions())
 
     lu1 = LibraryUser("lu", "lu", "lu", "lu", "admin")
-    print(lu1.remove_book("", "", 15, 1))
+    print(lu1.remove_book("", "", 15, 1))  # try except
     console.print(lu1)
     # console.print("TEST COLOR", style="bold red")
 
