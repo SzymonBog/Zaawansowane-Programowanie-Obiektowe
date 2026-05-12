@@ -2,6 +2,8 @@
 wytworcza, singleton
 dekorator, adapter(do pobierania z isbn)
 pamiątka, iterator
+
+run in terminal(not run): python main.py
 """
 from typing import Self
 from abc import ABC, abstractmethod
