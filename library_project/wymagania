@@ -45,11 +45,14 @@ Wymagania funkcjonalne
         możliwość "pobrania" danych książki z zewnętrznej bazy danych na podstawie ISBN. (nie trzeba isbn)
 
 
-wytworcza,
+wytworcza, \/
 singleton \/
 
-dekorator,
-adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor?)]
+dekorator, \/
+adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor)]
 
 iterator,
-pamiątka(czy może być z zapisem do i odczytem z sql?)
+pamiątka(czy może być z zapisem do i odczytem z sql)
+
+
+typer, rich - w miare ogarniete
