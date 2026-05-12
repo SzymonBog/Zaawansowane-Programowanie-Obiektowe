@@ -318,7 +318,10 @@ def run():
     print(lu.get_permissions())
 
     lu1 = LibraryUser("lu", "lu", "lu", "lu", "admin")
-    print(lu1.remove_book("", "", 15, 1))  # try except
+    try:
+        print(lu1.remove_book("", "", 15, 1))  # try except
+    except RuntimeError:
+        print("You are not authorized")
     console.print(lu1)
     # console.print("TEST COLOR", style="bold red")
 
