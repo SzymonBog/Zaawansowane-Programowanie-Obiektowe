@@ -56,3 +56,7 @@ pamiątka(czy może być z zapisem do i odczytem z sql)
 
 
 typer, rich - w miare ogarniete
+
+pytania:
+- czy pamiątka może być z zapisem do i odczytem z sql
+- czy adapter może być "połączony" z metodą wytwórczą
