@@ -49,7 +49,7 @@ wytworcza, \/
 singleton \/
 
 dekorator, \/
-adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor)]
+adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor)] \/
 
 iterator,
 pamiątka(czy może być z zapisem do i odczytem z sql)
