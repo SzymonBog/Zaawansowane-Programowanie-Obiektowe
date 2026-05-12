@@ -40,7 +40,7 @@ class DatabaseConnection:  # singleton
                                 "name varchar(20), surname varchar(50), role varchar(255), logged_in int)")
 
             self.cursor.execute("create table books(title varchar(255), author varchar(255), year int unsigned, "
-                                "copies int unsigned)")
+                                "genre varchar(255), copies int unsigned)")
 
             self.cursor.execute("create table in_possession(username varchar(255), title varchar(255), "
                                 "since timestamp, foreign key(username) references users(username), "
@@ -64,8 +64,9 @@ class DatabaseConnection:  # singleton
             # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0][0])
             pass
 
-def set_permissions(fn: callable) -> callable:  # change to verify permissions
-    def setter(self, *args: list, **kwargs: dict):
+
+def verify_permissions(fn: callable) -> callable:  # change to verify permissions
+    def getter(self, *args: list, **kwargs: dict):
         fn(self, *args, **kwargs)
 
         if self.role == "admin":
@@ -73,7 +74,7 @@ def set_permissions(fn: callable) -> callable:  # change to verify permissions
         else:
             self.permissions = ["borrow books", "return books"]
 
-    return setter
+    return getter
 
 
 class User(ABC):
@@ -89,13 +90,32 @@ class User(ABC):
     def get_permissions(self) -> list:
         pass
 
+    @abstractmethod
+    def borrow_book(self, title: str, author: str) -> None:
+        pass
+
+    @abstractmethod
+    def return_book(self, title: str, author: str) -> None:
+        pass
+
+    @abstractmethod
+    def add_book(self, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        pass
+
+    @abstractmethod
+    def edit_book(self, title_old: str, author_old: str, year_old: int, genre_old: str, copies_old: int, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        pass
+
+    @abstractmethod
+    def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
+        pass
+
     #@abstractmethod
     #def set_permissions(self, permissions: list) -> None:
     #    pass
 
 
 class LibraryUser(User):
-    @set_permissions
     def __init__(self, username: str, password: str, name: str, surname: str, role: str) -> None:
         self.username = username
         self.password = password
@@ -103,7 +123,7 @@ class LibraryUser(User):
         self.surname = surname
         self.role = role
         self.logged_in = False
-        self.permissions = []
+        self.permissions = ["borrow books", "return books"]
         self.books = []
 
     def get_logged_in(self) -> bool:
@@ -118,11 +138,25 @@ class LibraryUser(User):
     def get_permissions(self) -> list:
         return self.permissions
 
+    @verify_permissions
     def borrow_book(self, title: str, author: str) -> None:
         self.books.append((title, author))
 
+    @verify_permissions
     def return_book(self, title: str, author: str) -> None:
         self.books.remove((title, author))
+
+    @verify_permissions
+    def edit_book(self, title_old: str, author_old: str, year_old: int, genre_old: str, copies_old: int, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        pass
+
+    @verify_permissions
+    def add_book(self, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        pass
+
+    @verify_permissions
+    def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
+        pass
 
     def __str__(self):
         return f"{self.role}: {self.username} - {self.name} {self.surname}"
@@ -138,8 +172,8 @@ class LibraryUser(User):
 
         yield text
 
+
 class LibraryAdmin(User):
-    @set_permissions
     def __init__(self, username: str, password: str, name: str, surname: str, role: str) -> None:
         self.username = username
         self.password = password
@@ -147,7 +181,7 @@ class LibraryAdmin(User):
         self.surname = surname
         self.role = role
         self.logged_in = False
-        self.permissions = []
+        self.permissions = ["add books", "edit books", "remove books"]
 
     def get_logged_in(self) -> bool:
         return self.logged_in
@@ -161,9 +195,23 @@ class LibraryAdmin(User):
     def get_permissions(self) -> list:
         return self.permissions
 
-    def add_book(self, title: str, author: str, year: int, copies: int) -> None:
+    @verify_permissions
+    def borrow_book(self, title: str, author: str) -> None:
+        pass
+
+    @verify_permissions
+    def return_book(self, title: str, author: str) -> None:
+        pass
+
+    @verify_permissions
+    def edit_book(self, title_old: str, author_old: str, year_old: int, genre_old: str, copies_old: int, title: str, author: str, year: int, genre: str, copies: int) -> None:
         raise Exception("Not implemented")
 
+    @verify_permissions
+    def add_book(self, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        raise Exception("Not implemented")
+
+    @verify_permissions
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         raise Exception("Not implemented")
 
@@ -210,6 +258,48 @@ class Factory:
         return self._factories[role](username, password, name, surname, role)
 
 
+class Book:
+    def __init__(self, title: str, author: str, year: int, genre: str, copies: int) -> None:
+        self.title = title
+        self.author = author
+        self.year = year
+        self.genre = genre
+        self.copies = copies
+
+    def get_title(self):
+        return self.title
+
+    def set_title(self, title: str):
+        self.title = title
+
+    def get_author(self):
+        return self.author
+
+    def set_author(self, author: str):
+        self.author = author
+
+    def get_year(self):
+        return self.year
+
+    def set_year(self, year: str):
+        self.year = year
+
+    def get_genre(self):
+        return self.genre
+
+    def set_genre(self, genre: str):
+        self.genre = genre
+
+    def get_copies(self):
+        return self.copies
+
+    def set_copies(self, copies: str):
+        self.copies = copies
+
+
+
+
+
 @app.command()
 def run():
     mydb = DatabaseConnection("library_database.db")
@@ -224,6 +314,7 @@ def run():
     print(lu1.get_permissions())
     console.print(lu1)
     # console.print("TEST COLOR", style="bold red")
+
 
 if __name__ == "__main__":
     app()
