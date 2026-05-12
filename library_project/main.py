@@ -64,7 +64,7 @@ class DatabaseConnection:  # singleton
             # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall()[0][0])
             pass
 
-def set_permissions(fn: callable) -> callable:
+def set_permissions(fn: callable) -> callable:  # change to verify permissions
     def setter(self, *args: list, **kwargs: dict):
         fn(self, *args, **kwargs)
 
