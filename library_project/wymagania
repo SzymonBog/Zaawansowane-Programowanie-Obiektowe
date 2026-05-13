@@ -51,8 +51,8 @@ singleton \/
 dekorator, \/
 adapter[do pobierania z isbn (zrobic aby moglo uzywac cursor)] \/
 
-iterator,
-pamiątka(czy może być z zapisem do i odczytem z sql)
+iterator, \/
+pamiątka(czy może być z zapisem do i odczytem z sql) \/
 
 
 typer, rich - w miare ogarniete
@@ -60,3 +60,8 @@ typer, rich - w miare ogarniete
 pytania:
 - czy pamiątka może być z zapisem do i odczytem z sql (tak)
 - czy adapter może być "połączony" z metodą wytwórczą (tak)
+
+
+PRZY LOGOWANIU DODAJ:
+-SPRAWDZENIE CZY ZAREZERWOWANA KSIAZKA JEST DOSTEPNA(JESLI TAK WYSWIETL POWIADOMIENIE)
+
