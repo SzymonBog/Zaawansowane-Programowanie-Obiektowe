@@ -6,6 +6,7 @@ pamiątka, iterator
 run in terminal(not run): python main.py
 """
 import datetime
+import random
 from typing import Self
 from abc import ABC, abstractmethod
 import sqlite3
@@ -18,6 +19,13 @@ from rich.text import Text
 console = Console()
 
 app = typer.Typer()
+
+
+def generate_isbn():
+    isbn = "798"
+    for i in range(10):
+        isbn += str(random.randint(0, 9))
+    return isbn
 
 
 class DatabaseConnection:  # singleton
@@ -41,7 +49,7 @@ class DatabaseConnection:  # singleton
                                 "name varchar(20), surname varchar(50), role varchar(255), logged_in int)")
 
             self.cursor.execute("create table books(title varchar(255), author varchar(255), year int unsigned, "
-                                "genre varchar(255), copies int unsigned)")
+                                "genre varchar(255), copies int unsigned, isbn varchar(13))")
 
             self.cursor.execute("create table in_possession(username varchar(255), title varchar(255))")
 
@@ -115,6 +123,7 @@ class DatabaseConnection:  # singleton
     def insert(self, what: list, table: str):
         increment = False
         if table == "books":
+
             increment = self.cursor.execute(f"select count(*) from {table} where title = ? and author = ? and year = ? and genre = ?",(what[0], what[1], what[2], what[3])).fetchone()[0] > 0
 
         if not increment:
@@ -125,7 +134,23 @@ class DatabaseConnection:  # singleton
                 else:
                     qm += ", ?"
 
-            self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
+            if table == "books":
+                qm += ", ?"
+
+                isbn = generate_isbn()
+                invalid = True
+                while invalid:
+                    if self.cursor.execute(f"select * from books where isbn=?", (isbn,)).fetchone() == None:
+                        invalid = False
+                    else:
+                        isbn = generate_isbn()
+                    #if self.cursor.execute(f"select * from books where isbn=?", (isbn,)).fetchone():
+
+                what.append(isbn)
+
+                self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
+            else:
+                self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
         else:
             copies = self.cursor.execute("select copies from books where title=? and author=? and year=? and genre=?", (what[0], what[1], what[2], what[3])).fetchone()[0]
             self.update(["copies"], [int(copies) + int(what[4])], "books", {"title":what[0], "author":what[1], "year":what[2], "genre":what[3]})
@@ -480,7 +505,7 @@ class Book:
         self.isbn = isbn
 
     def __str__(self):
-        return f"{self.title} by {self.author} written in {self.year}, available copies: {self.copies}, isbn: {self.isbn}"
+        return f"{self.title} by {self.author} written in {self.year}, available copies: {self.copies}, isbn: {self.get_isbn()}"
 
 
 class GenreIterator:
@@ -493,10 +518,20 @@ class GenreIterator:
         self.database = database
         self.n = 0
 
-    def find_books(self, genre: str):
+    def find_books_by_genre(self, genre: str):
         self.books = []
         if genre is not None:
             self.books = self.database.select(["*"], "books", {"genre": genre})
+        else:
+            self.books = self.database.select(["*"], "books", None)
+
+        self.n = 0
+        self.limit = len(self.books)
+
+    def find_books_by_isbn(self, isbn: str):
+        self.books = []
+        if isbn is not None:
+            self.books = self.database.select(["*"], "books", {"isbn": isbn})
         else:
             self.books = self.database.select(["*"], "books", None)
 
@@ -510,7 +545,9 @@ class GenreIterator:
         if self.n < self.limit:
             book = self.books[self.n]
             self.n += 1
-            return Book(book[0], book[1], book[2], book[3], book[4])
+            b = Book(book[0], book[1], book[2], book[3], book[4])
+            b.set_isbn(book[5])
+            return b
 
         raise StopIteration
 
@@ -567,7 +604,8 @@ def run():
     """
 
     it = GenreIterator(db_adapter)
-    it.find_books(None)
+    it.find_books_by_genre(None)
+    # it.find_books_by_isbn("7986909350032")
 
     for i, j in zip(range(it.limit), it):
         print(f"{i+1}) {j}")
