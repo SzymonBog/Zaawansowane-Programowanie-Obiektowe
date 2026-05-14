@@ -46,7 +46,7 @@ class DatabaseConnection:  # singleton
         if self.cursor.execute("select name from sqlite_master where type='table'").fetchall() == []:
             # table creation
             self.cursor.execute("create table users(username varchar(255) primary key, password varchar(255), "
-                                "name varchar(20), surname varchar(50), role varchar(255), logged_in int)")
+                                "name varchar(20), surname varchar(50), role varchar(255), logged_in int, notification varchar(255))")
 
             self.cursor.execute("create table books(title varchar(255), author varchar(255), year int unsigned, "
                                 "genre varchar(255), copies int unsigned, isbn varchar(13))")
@@ -56,8 +56,8 @@ class DatabaseConnection:  # singleton
             self.cursor.execute("create table reservations(username varchar(255), title varchar(255))")
             # the same table as in_possession but works differently
 
-            self.cursor.execute("create table history(id int primary key, username varchar(255), action varchar(20), title varchar(255), "
-                                "author varchar(255), sql_command varchar(1000), reverse_sql_command varchar(1000))") # action = rent/return
+            self.cursor.execute("create table history(id integer primary key autoincrement, username varchar(255), action varchar(20), title varchar(255), "
+                                "author varchar(255), sql_command varchar(1000), reverse_sql_command varchar(1000))") # action = borrow/return
 
             # save tables/changes to db
             self.mydb.commit()
@@ -78,23 +78,38 @@ class DatabaseConnection:  # singleton
             else:
                 columns += f", {what[i]}"
 
-        if condition is not None:
+        if condition is not None and not ("distinct" in condition.keys() or ("distinct" in condition.values())):
             cond = ""
             n = 0
             for i in condition.keys():
-                if n == 0:
-                    cond = f"{i} = ?"
-                    n += 1
-                else:
-                    cond += f" and {i} = ?"
+                if i != "distinct":
+                    if n == 0:
+                        cond = f"{i} = ?"
+                        n += 1
+                    else:
+                        cond += f" and {i} = ?"
 
             values = tuple(condition.values())
             selection = self.cursor.execute(f"select {columns} from {table} where {cond}", values).fetchall()
+
+        elif condition is not None and ("distinct" in condition.keys() or ("distinct" in condition.values())):
+            cond = ""
+            n = 0
+            for i in condition.keys():
+                if i != "distinct":
+                    if n == 0:
+                        cond = f"{i} = ?"
+                        n += 1
+                    else:
+                        cond += f" and {i} = ?"
+
+            selection = self.cursor.execute(f"select distinct {columns} from {table}").fetchall()
+
         else:
             selection = self.cursor.execute(f"select {columns} from {table}").fetchall()
         return selection
 
-    def update(self, what: list, values: list, table: str, condition: dict = None) -> list:
+    def update(self, what: list, values: list, table: str, condition: dict = None) -> None:
         columns = ""
         for i in range(len(what)):
             if i == 0:
@@ -149,6 +164,8 @@ class DatabaseConnection:  # singleton
                 what.append(isbn)
 
                 self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
+            elif table == "history":
+                self.cursor.execute(f"insert into {table} (username, action, title, author, sql_command, reverse_sql_command) values ({qm})", tuple(what))
             else:
                 self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
         else:
@@ -204,7 +221,7 @@ def verify_permissions(fn: callable) -> callable:  # change to verify permission
         found = False
 
         for p in self.permissions:
-            print(p)
+            # print(p)
             if str(fn).__contains__(p):
                 # print("yay")
                 found = True
@@ -255,6 +272,21 @@ class User(ABC):
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         pass
 
+    @abstractmethod
+    def get_notification(self):
+        pass
+
+    @abstractmethod
+    def set_notification(self, notif) -> None:
+        pass
+
+    @abstractmethod
+    def revert_last_action(self):
+        pass
+
+    @abstractmethod
+    def show_history(self):
+        pass
 
 class LibraryUser(User):
     def __init__(self, username: str, password: str, name: str, surname: str, role: str, database: DatabaseAdapter) -> None:
@@ -267,6 +299,7 @@ class LibraryUser(User):
         self.permissions = ["borrow_book", "return_book", "reserve_book"]
         self.books = []
         self.database = database
+        self.notification = None
 
     def get_logged_in(self) -> bool:
         return self.logged_in
@@ -282,23 +315,34 @@ class LibraryUser(User):
 
     @verify_permissions
     def borrow_book(self, title: str, author: str) -> None:  # ???????????
-        self.books.append((title, author))
+        has_book = self.database.select(["count(*)"], "in_possession", {"username":self.username, "title":title})[0][0]
 
-        self.database.insert([self.username, title], "in_possession")
+        if has_book != 0:
+            raise RuntimeError("You already have this book")
+        else:
 
-        ids = self.database.select(["id"], "history", {"username":self.username})
-        id = 0
-        for i in ids:
-            if id == 0:
-                id = int(i)
-            else:
-                if int(i) > id:
+            self.books.append((title, author))
+
+            self.database.insert([self.username, title], "in_possession")
+
+            """
+            ids = self.database.select(["id"], "history", {"username":self.username})
+            id = 0
+            for i in ids:
+                if id == 0:
                     id = int(i)
+                else:
+                    if int(i) > id:
+                        id = int(i)
+            """
 
-        normal_sql = f"insert into in_possession (username, title) values (?, ?)"
-        reversed_sql = f"delete from in_possession where username=? and title=?"
+            normal_sql = f"insert into in_possession (username, title) values (?, ?)"
+            reversed_sql = f"delete from in_possession where username=? and title=?"
 
-        self.database.insert([id+1, self.username, "borrow", title, author, normal_sql, reversed_sql], "history")
+            # self.database.insert([id+1, self.username, "borrow", title, author, normal_sql, reversed_sql], "history")
+            self.database.insert([self.username, "borrow", title, author, normal_sql, reversed_sql], "history")
+            number_of_copies = self.database.select(["copies"], "books", {"title": title, "author": author})[0]
+            self.database.update(["copies"], [number_of_copies[0]-1], "books", {"title": title, "author": author})
 
     @verify_permissions
     def return_book(self, title: str, author: str) -> None:  # ????????????
@@ -306,6 +350,7 @@ class LibraryUser(User):
 
         self.database.remove("in_possession", {"username": self.username, "title": title})
 
+        """
         ids = self.database.select(["id"], "history", {"username": self.username})[0]
         id = 0
         for i in ids:
@@ -314,11 +359,23 @@ class LibraryUser(User):
             else:
                 if int(i) > id:
                     id = int(i)
+        """
 
         reversed_sql = f"insert into in_possession (username, title) values (?, ?)"
         normal_sql = f"delete from in_possession where username=? and title=?"
 
-        self.database.insert([id + 1, self.username, "return", title, author, normal_sql, reversed_sql], "history")
+        self.database.insert([self.username, "return", title, author, normal_sql, reversed_sql], "history")
+        # self.database.insert([id + 1, self.username, "return", title, author, normal_sql, reversed_sql], "history")
+        number_of_copies = self.database.select(["copies"], "books", {"title": title, "author": author})[0]
+        self.database.update(["copies"], [number_of_copies[0] + 1], "books", {"title": title, "author": author})
+
+        # notification
+        try:
+            username = self.database.select(["username"], "reservations", {"title": title})[0][0]
+            self.database.remove("reservations", {"username": username, "title": title})
+            self.database.update(["notification"], [f"Book {title} by {author} is now available"], "users", {"username": self.username})
+        except IndexError:
+            pass
 
     @verify_permissions
     def reserve_book(self, title: str, author: str) -> None:
@@ -338,11 +395,29 @@ class LibraryUser(User):
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         pass
 
+    def get_notification(self):
+        return self.notification
+
+    def set_notification(self, notif) -> None:
+        self.notification = notif
+
     def revert_last_action(self):
         operations = self.database.select(["*"], "history", {"username":self.username})
-        last_action = operations[len(operations)-1]
-        print(last_action)
+        # print(operations)
+        last_action, title, author = operations[len(operations)-1][2], operations[len(operations)-1][3], operations[len(operations)-1][4]
+        # print(last_action)
+        if last_action == "borrow":
+            self.return_book(title, author)
+        if last_action == "return":
+            self.borrow_book(title, author)
         # raise Exception("Not implemented")
+
+    def show_history(self):  # shows from most recent
+        history = self.database.select(["*"], "history", {"username":self.username})
+        action_history = f"Your history(from most recent):"
+        for h, i in zip(reversed(history), range(len(history))):
+            action_history += f"\n{i+1}. {h[2]}ed book '{h[3]}' by {h[4]}"
+        return action_history
 
     def __str__(self):
         return f"{self.role}: {self.username} - {self.name} {self.surname}"
@@ -406,6 +481,18 @@ class LibraryAdmin(User):
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         self.database.remove("books", {"title":title, "author":author, "year":year})
 
+    def get_notification(self):
+        pass
+
+    def set_notification(self, notif) -> None:
+        pass
+
+    def revert_last_action(self):
+        pass
+
+    def show_history(self):
+        pass
+
     # def __str__(self):
     #    return f"[bold red]{self.role}[/bold red]: {self.username} - {self.name} {self.surname}"
 
@@ -446,17 +533,27 @@ class Factory:
         }
         self.database = database
 
-    def create_user(self, username: str, password: str, name: str, surname: str, role: str) -> User:
+    def create_user(self, username: str, password: str, name: str, surname: str, role: str, register: bool) -> User:
         # print(self.database.select(["*"], "users", {"username": username}) == [])
-        if self.database.select(["*"], "users", {"username": username}) == []:
+        if register:
+            if role == "admin" or role == "user":
+                if self.database.select(["*"], "users", {"username": username}) == []:
+                    new_user = self._factories[role]().create_user(username, password, name, surname, role, self.database)
+                    self.database.insert([username, password, name, surname, role, False, None], "users")
+                    self.database.commit()
 
-            new_user = self._factories[role]().create_user(username, password, name, surname, role, self.database)
-            self.database.insert([username, password, name, surname, role, False], "users")
-            self.database.commit()
-
+                else:
+                    raise ValueError(f"User {username} already exists")
+                return new_user
+            else:
+                raise ValueError(f"Invalid role: {role}")
         else:
-            raise ValueError(f"User {username} already exists")
-        return new_user
+            user = self._factories[role]().create_user(username, password, name, surname, role, self.database)
+            user.set_logged_in()
+            #self.database.insert([username, password, name, surname, role, False, None], "users")
+            self.database.update(["logged_in"], [True], "users", {"username": username, "password": password})
+            self.database.commit()
+            return user
 
 
 class Book:
@@ -508,7 +605,7 @@ class Book:
         return f"{self.title} by {self.author} written in {self.year}, available copies: {self.copies}, isbn: {self.get_isbn()}"
 
 
-class GenreIterator:
+class BookIterator:
     books: list
     n: int
     limit: int
@@ -552,64 +649,118 @@ class GenreIterator:
         raise StopIteration
 
 
+def register_user(user_factory: Factory):
+    name = input("Enter your name> ")
+    surname = input("Enter your surname> ")
+    username = input("Enter your username> ")
+    password = input("Enter your password> ")
+    role = input("Enter your role(admin or user)> ")
+    try:
+        user_factory.create_user(username, password, name, surname, role, True)
+    except ValueError as e:
+        print(e)
+
+
+def log_in_user(user_factory: Factory, db_adapter: DatabaseAdapter):
+    username = input("Enter your username> ")
+    password = input("Enter your password> ")
+    user_data = db_adapter.select(["name", "surname", "role"], "users", {"username": username, "password": password})
+
+    if user_data == []:
+        return None, "Invalid username or password"
+    else:
+        name, surname, role = user_data[0]
+        user = user_factory.create_user(username, password, name, surname, role, False)
+        return user, "Logged in"
+
+
+def options(user: User, user_factory: Factory, db_adapter: DatabaseAdapter, iterator: BookIterator):
+    if user is None:
+        print("1 - Log in\n2 - Register user\n3 - Quit\n")
+        choice = input("> ")
+
+        match(choice):
+            case "1":
+                user, note = log_in_user(user_factory, db_adapter)
+                print(note)
+                return user
+            case "2":
+                register_user(user_factory)
+            case "3":
+                print("Goodbye!")
+                quit(0)
+            case _:
+                print("Invalid input")
+
+        return None
+
+    elif user.__class__ == LibraryUser:
+        print("1 - List all books\n2 - Search book by genre\n3 - Search book by isbn\n4 - Borrow book\n5 - Return book\n6 - Reserve book\n7 - Show history\n0 - Log out\n")
+        choice = input("> ")
+
+        match(choice):
+            case "1":
+                iterator.find_books_by_genre(None)
+
+                for i, j in zip(range(iterator.limit), iterator):
+                    print(f"{i + 1}) {j}")
+
+            case "2":
+                genre = db_adapter.select(["genre"], "books", {"distinct":"distinct"})
+                # print(genre)
+                if genre != []:
+
+                    while True:
+                        for i in range(len(genre)):
+                            print(f"{i + 1}) {genre[i][0]}")
+
+                        choice2 = input("> ")
+
+                        try:
+                            choice2 = int(choice2)
+
+                            if not 1 <= choice2 <= len(genre):
+                                raise ValueError("Invalid choice")
+                            else:
+                                genre = genre[choice2-1][0]
+                                break
+
+                        except ValueError:
+                            print("Invalid input")
+
+                    iterator.find_books_by_genre(genre)
+
+                    for i, j in zip(range(iterator.limit), iterator):
+                        print(f"{i + 1}) {j}")
+
+                else:
+                    print("There are no books")
+
+            case "3":
+                choice2 = input("Enter isbn> ")
+
+                iterator.find_books_by_isbn(choice2)
+
+                if iterator.limit == 0:
+                    print(f"There is no book with isbn: {choice2}")
+                else:
+                    for i, j in zip(range(iterator.limit), iterator):
+                        print(f"{i + 1}) {j}")
+
+
 @app.command()
 def run():
     mydb = DatabaseConnection("library_database.db")
-    # mydb1 = DatabaseConnection("library_database.db")
     db_adapter = DatabaseAdapter(mydb)
-
-    # print(mydb is mydb1)
     user_factory = Factory(db_adapter)
+    iterator = BookIterator(db_adapter)
+    user = None
 
-    try:
-        user = user_factory.create_user("user1", "password1", "name1", "surname1", "user")
-    except ValueError:
-        print("This username has already been taken")
-
-    try:
-        pass
-        #print(user.remove_book("", "", 15, 1))  # try except
-    except RuntimeError:
-        print("You are not authorized")
-
-
-    # console.print(user)
-    # console.print("TEST COLOR", style="bold red")
-    db_adapter.insert(["It", "King", 2005, "horror", 1], "books")
-    db_adapter.insert(["It2", "King", 2007, "horror", 1], "books")
-    db_adapter.insert(["Harry Potter", "JKR", 2009, "fantasy", 1], "books")
-    db_adapter.insert(["Harry Potter", "JKR", 2009, "fantasy", 1], "books")
-    db_adapter.insert(["Harry Potter", "JKR", 2009, "fantasy", 1], "books")
-    db_adapter.insert(["It", "King", 2005, "horror", 1], "books")
-    db_adapter.insert(["It", "King", 2005, "horror", 1], "books")
-    # db_adapter.update(["year"], [2000], "books", {"genre": "horror"})
-    # db_adapter.remove("books", {"author": "JKR"})
-    # db_adapter.commit()
-
-    # user.reserve_book("It", "King")
-    # print(db_adapter.select(["*"], "reservations"))
-
-    """
-    user.borrow_book("It", "King")
-    c = db_adapter.select(["*"], "history")[0][6]
-    t = db_adapter.select(["*"], "history")[0][3]
-    u = db_adapter.select(["*"], "history")[0][1]
-    print(db_adapter.select(["*"], "history"))
-    print(db_adapter.select(["*"], "in_possession"))
-    print(c)
-    mydb.cursor.execute(c, (u, t))
-    mydb.commit()
-    print(db_adapter.select(["*"], "history"))
-    print(db_adapter.select(["*"], "in_possession"))
-    """
-
-    it = GenreIterator(db_adapter)
-    it.find_books_by_genre(None)
-    # it.find_books_by_isbn("7986909350032")
-
-    for i, j in zip(range(it.limit), it):
-        print(f"{i+1}) {j}")
-
+    while True:
+        if user is None:
+            user = options(user, user_factory, db_adapter, iterator)
+        else:
+            options(user, user_factory, db_adapter, iterator)
 
 if __name__ == "__main__":
     app()
