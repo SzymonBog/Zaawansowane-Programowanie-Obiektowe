@@ -13,6 +13,7 @@ import sqlite3
 import typer
 from rich import print
 from rich.console import Console, RenderResult
+from rich.markup import escape
 from rich.text import Text
 
 
@@ -22,7 +23,7 @@ app = typer.Typer()
 
 
 def generate_isbn():
-    isbn = "798"
+    isbn = "978"
     for i in range(10):
         isbn += str(random.randint(0, 9))
     return isbn
@@ -46,7 +47,9 @@ class DatabaseConnection:  # singleton
         if self.cursor.execute("select name from sqlite_master where type='table'").fetchall() == []:
             # table creation
             self.cursor.execute("create table users(username varchar(255) primary key, password varchar(255), "
-                                "name varchar(20), surname varchar(50), role varchar(255), logged_in int, notification varchar(255))")
+                                "name varchar(20), surname varchar(50), role varchar(255), logged_in int)")
+
+            self.cursor.execute("create table notifications(username varchar(255), notification varchar(255))")
 
             self.cursor.execute("create table books(title varchar(255), author varchar(255), year int unsigned, "
                                 "genre varchar(255), copies int unsigned, isbn varchar(13))")
@@ -61,7 +64,7 @@ class DatabaseConnection:  # singleton
 
             # save tables/changes to db
             self.mydb.commit()
-            console.print(f"Database {self.database_name} created")  # :boom:")
+            print(f"Database {self.database_name} created")  # :boom:")
         else:
             # for testing
             # print(self.cursor.execute("select name from sqlite_master where type='table'").fetchall())
@@ -288,6 +291,14 @@ class User(ABC):
     def show_history(self):
         pass
 
+    @abstractmethod
+    def get_username(self):
+        pass
+
+    @abstractmethod
+    def get_role(self):
+        pass
+
 class LibraryUser(User):
     def __init__(self, username: str, password: str, name: str, surname: str, role: str, database: DatabaseAdapter) -> None:
         self.username = username
@@ -296,7 +307,7 @@ class LibraryUser(User):
         self.surname = surname
         self.role = role
         self.logged_in = False
-        self.permissions = ["borrow_book", "return_book", "reserve_book"]
+        self.permissions = ["borrow_book", "return_book", "reserve_book", "revert_last_action"]
         self.books = []
         self.database = database
         self.notification = None
@@ -373,7 +384,7 @@ class LibraryUser(User):
         try:
             username = self.database.select(["username"], "reservations", {"title": title})[0][0]
             self.database.remove("reservations", {"username": username, "title": title})
-            self.database.update(["notification"], [f"Book {title} by {author} is now available"], "users", {"username": self.username})
+            self.database.insert([username, f"Book {title} by {author} is now available"], "notifications")
         except IndexError:
             pass
 
@@ -401,16 +412,23 @@ class LibraryUser(User):
     def set_notification(self, notif) -> None:
         self.notification = notif
 
+    def get_username(self):
+        return self.username
+
+    @verify_permissions
     def revert_last_action(self):
         operations = self.database.select(["*"], "history", {"username":self.username})
         # print(operations)
-        last_action, title, author = operations[len(operations)-1][2], operations[len(operations)-1][3], operations[len(operations)-1][4]
-        # print(last_action)
-        if last_action == "borrow":
-            self.return_book(title, author)
-        if last_action == "return":
-            self.borrow_book(title, author)
-        # raise Exception("Not implemented")
+        if operations != []:
+            last_action, title, author = operations[len(operations)-1][2], operations[len(operations)-1][3], operations[len(operations)-1][4]
+            # print(last_action)
+            if last_action == "borrow":
+                self.return_book(title, author)
+            if last_action == "return":
+                self.borrow_book(title, author)
+            # raise Exception("Not implemented")
+        else:
+            raise RuntimeError("No action to revert.")
 
     def show_history(self):  # shows from most recent
         history = self.database.select(["*"], "history", {"username":self.username})
@@ -418,6 +436,9 @@ class LibraryUser(User):
         for h, i in zip(reversed(history), range(len(history))):
             action_history += f"\n{i+1}. {h[2]}ed book '{h[3]}' by {h[4]}"
         return action_history
+
+    def get_role(self):
+        return self.role
 
     def __str__(self):
         return f"{self.role}: {self.username} - {self.name} {self.surname}"
@@ -481,17 +502,24 @@ class LibraryAdmin(User):
     def remove_book(self, title: str, author: str, year: int, copies: int) -> None:
         self.database.remove("books", {"title":title, "author":author, "year":year})
 
+    def get_username(self):
+        return self.username
+
     def get_notification(self):
         pass
 
     def set_notification(self, notif) -> None:
         pass
 
+    @verify_permissions
     def revert_last_action(self):
         pass
 
     def show_history(self):
         pass
+
+    def get_role(self):
+        return self.role
 
     # def __str__(self):
     #    return f"[bold red]{self.role}[/bold red]: {self.username} - {self.name} {self.surname}"
@@ -539,7 +567,7 @@ class Factory:
             if role == "admin" or role == "user":
                 if self.database.select(["*"], "users", {"username": username}) == []:
                     new_user = self._factories[role]().create_user(username, password, name, surname, role, self.database)
-                    self.database.insert([username, password, name, surname, role, False, None], "users")
+                    self.database.insert([username, password, name, surname, role, False], "users")
                     self.database.commit()
 
                 else:
@@ -658,7 +686,7 @@ def register_user(user_factory: Factory):
     try:
         user_factory.create_user(username, password, name, surname, role, True)
     except ValueError as e:
-        print(e)
+        print(f"[red]{e}[/red]")
 
 
 def log_in_user(user_factory: Factory, db_adapter: DatabaseAdapter):
@@ -671,12 +699,169 @@ def log_in_user(user_factory: Factory, db_adapter: DatabaseAdapter):
     else:
         name, surname, role = user_data[0]
         user = user_factory.create_user(username, password, name, surname, role, False)
-        return user, "Logged in"
+        user.set_logged_in()
+        db_adapter.update(["logged_in"], [1], "users", {"username":f"{user.get_username()}"})
+        notif = db_adapter.select(["notification"], "notifications", {"username": username})
+        if notif == []:
+            return user, "Logged in"
+        else:
+            db_adapter.remove("notifications", {"notification": notif[0][0], "username": user.get_username()})
+            return user, f"Logged in\n{notif[0][0]}"
+
+
+def log_out(user: User, db_adapter: DatabaseAdapter):
+    # print(user)
+    db_adapter.update(["logged_in"], [0], "users", {"username": f"{user.get_username()}"})
+    user.set_logged_in()
+    return None, f"Logged out"
+
+def list_books(user: User, iterator: BookIterator, genre: str, isbn: str):
+    loop1 = True
+    while loop1:
+        if isbn is None:
+            iterator.find_books_by_genre(genre)
+        elif isbn is not None:
+            iterator.find_books_by_isbn(isbn)
+            if iterator.limit == 0:
+                print(f"There is no book with isbn: {isbn}")
+                break
+
+        b = iterator.books
+        books = {}
+
+        for i, j in zip(range(iterator.limit), iterator):
+            print(f"{i + 1}) {j}")
+            books[f"{i + 1}"] = b[i]
+        print("0) Back\n")
+
+        choice2 = input("> ")
+        if choice2 in books:
+            b = Book(books[choice2][0], books[choice2][1], books[choice2][2], books[choice2][3], books[choice2][4])
+            b.set_isbn(books[choice2][5])
+            if b.get_copies() > 0:
+                loop2 = True
+                while loop2:
+                    print(f"{b}\n1 - Borrow book\n2 - Edit book\n3 - Remove book\n0 - Back\n")
+                    choice3 = input("> ")
+
+                    if choice3 == "1":
+                        try:
+                            user.borrow_book(b.get_title(), b.get_author())
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "2":
+                        new_title = input("Enter book new title> ")
+                        new_author = input("Enter book new author> ")
+                        new_genre = input("Enter book new genre> ")
+
+                        year_change = True
+                        while year_change:
+                            try:
+                                new_year = int(input("Enter book new year> "))
+                                year_change = False
+                            except ValueError:
+                                print("Year has to be an integer")
+
+                        copies_change = True
+                        while copies_change:
+                            try:
+                                new_copies = int(input("Enter book new copies> "))
+                                copies_change = False
+                            except ValueError:
+                                print("Copies has to be an integer")
+
+                        try:
+                            user.edit_book(b.get_title(), b.get_author(), b.get_year(), b.get_genre(), b.get_copies(), new_title, new_author, new_year, new_genre, new_copies)
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "3":
+                        try:
+                            user.remove_book(b.get_title(), b.get_author(), b.get_year(), b.get_copies())
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "0":
+                        loop2 = False
+
+                    else:
+                        print("Invalid choice")
+            else:
+                loop2 = True
+                while loop2:
+                    print(f"{b}\n1 - Reserve book\n2 - Edit book\n3 - Remove book\n0 - Back\n")
+                    choice3 = input("> ")
+
+                    if choice3 == "1":
+                        try:
+                            user.reserve_book(b.get_title(), b.get_author())
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "2":
+                        new_title = input("Enter book new title> ")
+                        new_author = input("Enter book new author> ")
+                        new_genre = input("Enter book new genre> ")
+
+                        year_change = True
+                        while year_change:
+                            try:
+                                new_year = int(input("Enter book new year> "))
+                                year_change = False
+                            except ValueError:
+                                print("Year has to be an integer")
+
+                        copies_change = True
+                        while copies_change:
+                            try:
+                                new_copies = int(input("Enter book new copies> "))
+                                copies_change = False
+                            except ValueError:
+                                print("Copies has to be an integer")
+
+                        try:
+                            user.edit_book(b.get_title(), b.get_author(), b.get_year(), b.get_genre(), b.get_copies(), new_title, new_author, new_year, new_genre, new_copies)
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "3":
+                        try:
+                            user.remove_book(b.get_title(), b.get_author(), b.get_year(), b.get_copies())
+                        except RuntimeError as e:
+                            print(f"[red]{e}[/red]")
+
+                        loop2 = False
+                        loop1 = False
+
+                    elif choice3 == "0":
+                        loop2 = False
+
+                    else:
+                        print("Invalid choice")
+
+        elif choice2 == "0":
+            loop1 = False
 
 
 def options(user: User, user_factory: Factory, db_adapter: DatabaseAdapter, iterator: BookIterator):
     if user is None:
-        print("1 - Log in\n2 - Register user\n3 - Quit\n")
+        print("1 - Log in\n2 - Register user\n0 - Quit\n")
         choice = input("> ")
 
         match(choice):
@@ -686,7 +871,7 @@ def options(user: User, user_factory: Factory, db_adapter: DatabaseAdapter, iter
                 return user
             case "2":
                 register_user(user_factory)
-            case "3":
+            case "0":
                 print("Goodbye!")
                 quit(0)
             case _:
@@ -694,51 +879,65 @@ def options(user: User, user_factory: Factory, db_adapter: DatabaseAdapter, iter
 
         return None
 
-    elif user.__class__ == LibraryUser:
-        print("1 - List all books\n2 - Search book by genre\n3 - Search book by isbn\n4 - Borrow book\n5 - Return book\n6 - Reserve book\n7 - Show history\n0 - Log out\n")
+    elif user is not None:
+        print(f"{user.get_role()}: {user.get_username()}")
+        print("1 - List all books\n2 - Search book by genre\n3 - Search book by isbn\n4 - Revert last action\n5 - Show history\n6 - Add book\n0 - Log out\n")
         choice = input("> ")
 
         match(choice):
             case "1":
-                iterator.find_books_by_genre(None)
-
-                for i, j in zip(range(iterator.limit), iterator):
-                    print(f"{i + 1}) {j}")
+                list_books(user, iterator, None, None)
+                return user
 
             case "2":
                 genre = db_adapter.select(["genre"], "books", {"distinct":"distinct"})
                 # print(genre)
                 if genre != []:
-
-                    while True:
+                    loop1 = True
+                    while loop1:
                         for i in range(len(genre)):
                             print(f"{i + 1}) {genre[i][0]}")
+                        print("0) Back\n")
 
                         choice2 = input("> ")
 
                         try:
                             choice2 = int(choice2)
 
-                            if not 1 <= choice2 <= len(genre):
+                            if not 0 <= choice2 <= len(genre):
                                 raise ValueError("Invalid choice")
                             else:
-                                genre = genre[choice2-1][0]
-                                break
+                                if choice2 == 0:
+                                    loop1 = False
+                                else:
+                                    genre = genre[choice2-1][0]
+                                    loop1 = False
 
                         except ValueError:
                             print("Invalid input")
 
+                    if choice2 == 0:
+                        pass
+                    else:
+                        list_books(user, iterator, genre, None)
+                    """
                     iterator.find_books_by_genre(genre)
 
                     for i, j in zip(range(iterator.limit), iterator):
                         print(f"{i + 1}) {j}")
+                    """
 
                 else:
                     print("There are no books")
 
+                return user
+
             case "3":
                 choice2 = input("Enter isbn> ")
 
+                list_books(user, iterator, None, choice2)
+                return user
+                """
                 iterator.find_books_by_isbn(choice2)
 
                 if iterator.limit == 0:
@@ -746,6 +945,55 @@ def options(user: User, user_factory: Factory, db_adapter: DatabaseAdapter, iter
                 else:
                     for i, j in zip(range(iterator.limit), iterator):
                         print(f"{i + 1}) {j}")
+                """
+            case "4":
+                try:
+                    user.revert_last_action()
+                except RuntimeError as e:
+                    print(f"[yellow]{e}[/yellow]")
+
+                return user
+
+            case "5":
+                print(user.show_history())
+                return user
+
+            case "6":
+                new_title = input("Enter book title> ")
+                new_author = input("Enter book author> ")
+                new_genre = input("Enter book genre> ")
+
+                year_change = True
+                while year_change:
+                    try:
+                        new_year = int(input("Enter book year> "))
+                        year_change = False
+                    except ValueError:
+                        print("Year has to be an integer")
+
+                copies_change = True
+                while copies_change:
+                    try:
+                        new_copies = int(input("Enter book copies> "))
+                        copies_change = False
+                    except ValueError:
+                        print("Copies has to be an integer")
+
+                try:
+                    user.add_book(new_title, new_author, new_year, new_genre, new_copies)
+                except RuntimeError as e:
+                    print(f"[red]{e}[/red]")
+
+                return user
+
+            case "0":
+                user, notif = log_out(user, db_adapter)
+                print(notif)
+                return user
+
+            case _:
+                print("Invalid input")
+                return user
 
 
 @app.command()
@@ -755,12 +1003,13 @@ def run():
     user_factory = Factory(db_adapter)
     iterator = BookIterator(db_adapter)
     user = None
+    # db_adapter.insert(["1", "notif"], "notifications")
 
     while True:
         if user is None:
             user = options(user, user_factory, db_adapter, iterator)
         else:
-            options(user, user_factory, db_adapter, iterator)
+            user = options(user, user_factory, db_adapter, iterator)
 
 if __name__ == "__main__":
     app()
