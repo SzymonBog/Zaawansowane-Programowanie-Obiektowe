@@ -550,7 +550,7 @@ class LibraryAdmin(User):
             year = external_db.get(isbn)["year"]
             copies = external_db.get(isbn)["copies"]
 
-            self.database.insert([title, author, year, genre, copies], "books")
+            self.database.insert([title, author, genre, year, copies], "books")
             return f"Successfully pulled book data with isbn:{isbn} from external database"
         else:
             return f"Failed to pull book data from external database. Book with isbn:{isbn} does not exist"
