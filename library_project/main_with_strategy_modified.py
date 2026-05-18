@@ -51,6 +51,27 @@ external_database = {
         "year": 2009,
         "genre": "Fantasy",
         "copies": 999,
+    },
+    "9794444444444": {
+        "title": "Apokalipsa Z: Początek końca",
+        "author": "Manel Loureiro",
+        "year": 2013,
+        "genre": "Horror",
+        "copies": 1200,
+    },
+    "9795555555555": {
+        "title": "Władca Pierścieni",
+        "author": "JRR Tolkien",
+        "year": 1954,
+        "genre": "Fantasy",
+        "copies": 600,
+    },
+    "9796666666666": {
+        "title": "To",
+        "author": "Stephen King",
+        "year": 1986,
+        "genre": "Horror",
+        "copies": 950,
     }
 }
 
@@ -197,17 +218,18 @@ class DatabaseConnection:  # singleton
                     qm += ", ?"
 
             if table == "books":
-                qm += ", ?"
+                if len(what) == 5:
+                    qm += ", ?"
 
-                isbn = generate_isbn()
-                invalid = True
-                while invalid:
-                    if self.cursor.execute(f"select * from books where isbn=?", (isbn,)).fetchone() == None:
-                        invalid = False
-                    else:
-                        isbn = generate_isbn()
+                    isbn = generate_isbn()
+                    invalid = True
+                    while invalid:
+                        if self.cursor.execute(f"select * from books where isbn=?", (isbn,)).fetchone() == None:
+                            invalid = False
+                        else:
+                            isbn = generate_isbn()
 
-                what.append(isbn)
+                    what.append(isbn)
 
                 self.cursor.execute(f"insert into {table} values ({qm})", tuple(what))
             elif table == "history":
@@ -550,7 +572,7 @@ class LibraryAdmin(User):
             year = external_db.get(isbn)["year"]
             copies = external_db.get(isbn)["copies"]
 
-            self.database.insert([title, author, genre, year, copies], "books")
+            self.database.insert([title, author, year, genre, copies, isbn], "books")
             return f"Successfully pulled book data with isbn:{isbn} from external database"
         else:
             return f"Failed to pull book data from external database. Book with isbn:{isbn} does not exist"
