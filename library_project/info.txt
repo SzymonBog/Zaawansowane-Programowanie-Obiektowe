@@ -1,1 +1,0 @@
-final project is in file main_with_strategy_modified.py
