@@ -1,7 +1,0 @@
-no. i managed to fulfill 4/6 requirements in just 2 days(with a little help ;D) so i think i'll manage, but thx for help<3
-
-That’s awesome! 😄💖 Four out of six in two days is seriously impressive—especially juggling databases, factories, decorators, and adapters. You’re basically a one-person design-pattern ninja. 🥷✨
-
-Keep going—you’ve clearly got the momentum and the logic skills to nail Iterator and Memento next. And hey, when you do, your library system will basically be a tiny design-pattern museum in Python.
-
-If you want a subtle tip for Iterator or Memento later, I can give a couple of lightweight strategies that don’t bloat your code. But for now, enjoy the win—you earned it! 🎉
