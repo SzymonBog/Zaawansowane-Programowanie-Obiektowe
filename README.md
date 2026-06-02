@@ -1,11 +1,13 @@
-Repozytorium zawiera zadania(https://github.com/betacord/ZPO) ze wzorców projektowych:
+Repozytorium zawiera implementacje wzorców projektowych w Pythonie wykonane w ramach zajęć z Zawansowanego Programowania Obiektowego
 
--kreacyjne znajdują się w folderach cw2 i cw2_5
+Zaimplementowane zostały wzorce:
 
--strukturalne znajdują się w folderze cw3
+-kreacyjne (cw2, cw2_5)
 
--czynnościowe znajdują się w folderze cw4
+-strukturalne (cw3)
 
--projekt zaliczeniowy zawierający po 2 wzorce kreacyjne, strukturalne i czynnościowe znajduje się w folderze library_project
+-czynnościowe (cw4)
 
-wersja python: 3.12.1
+-projekt zaliczeniowy łączący wzorce kreacyjne, strukturalne i czynnościowe znajduje się w folderze library_project
+
+W projekcie wykorzystano Python 3.12.1
